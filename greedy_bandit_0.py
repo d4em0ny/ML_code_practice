@@ -30,6 +30,8 @@ def pull(arm):
 
 def greedy_action(estimate_values):
 
+    # the main problem is here it always pick the first explored one... never changes
+    # check it with a constant
     return estimate_values.index(
         max(estimate_values)
     )
@@ -47,11 +49,12 @@ def update_estimate(
 
 
 
+# for optimistic initial value use: estimate_values = [1, 1, 1, 1, 1]
 estimate_values = [0,0,0,0,0]
 counts = [0,0,0,0,0]
 
 
-for step in range(1000):
+for step in range(1000000):
 
     arm = greedy_action(estimate_values)
     reward = pull(arm)
