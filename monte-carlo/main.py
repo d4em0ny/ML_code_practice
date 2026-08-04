@@ -1,39 +1,39 @@
 import gymnasium as gym
-from agent import MonteCarloAgent
+from agent import MCAgent
 
+#create env from the one of Model env't found in Gymnasium
 env = gym.make("Blackjack-v1")
-agent = MonteCarloAgent()
+# creating an agent.
+agent = MCAgent()
 
-state, info = env.reset()
+#creating initial state. (reset the env and start as new)
 
-print("initial state: ", state)
-terminated = False
-truncated = False
+no_of_episodes = 10000
 
-episode = []
+for episode_no in range(no_of_episodes):
+    state, info = env.reset()
 
+    terminated = False
+    truncated = False
 
-while not (terminated or truncated):
+    # creating a list to collect an episode
+    episode = []
 
-    action = agent.choose_action(state)
-    next_state, reward, terminated, truncated, info = env.step(action)
+    #Generating Episodes
+    while not (terminated):
 
-    episode.append([state, action, reward])
-    state = next_state
+        action = agent.choose_action(state)
+        next_state, reward, terminated, truncated, _ = env.step(action)
 
-returns = agent.calculate_returns(episode)
+        episode.append((state, action, reward))
+        state = next_state
 
+    agent.learn(episode)
 
-print("Episode: ")
-for transition in episode:
-    print(transition)
+print(len(agent.Q))
 
-agent.update(episode)
-
-print("\nLearned Q-values:")
-
-for state_action, value in agent.Q.items():
-    print(state_action, "=", value)
+for transition, value in agent.Q.items():
+    print(f"Transition: {transition}, Value: {value}")
 
 
 
