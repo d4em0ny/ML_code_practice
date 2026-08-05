@@ -42,11 +42,7 @@ def epsilon_greedy_action(estimate_values):
 
 
 
-def update_estimate(
-        estimate_values,
-        counts,
-        arm,
-        reward):
+def update_estimate(estimate_values, counts, arm, reward):
 
     counts[arm] += 1
     estimate_values[arm] += ( (1 / counts[arm]) * (reward - estimate_values[arm]))
@@ -56,17 +52,12 @@ estimate_values = [0,0,0,0,0]
 counts = [0,0,0,0,0]
 
 
-for step in range(10000):
+for step in range(100000):
 
     arm = epsilon_greedy_action(estimate_values)
     reward = pull(arm)
 
-    update_estimate(
-        estimate_values,
-        counts,
-        arm,
-        reward
-    )
+    update_estimate(estimate_values, counts, arm, reward)
 
 
     print(
