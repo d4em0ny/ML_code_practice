@@ -6,28 +6,30 @@ env = gym.make("Blackjack-v1")
 agent = QLearningAgent()
 
 
-state, _ = env.reset()
+for i in range(1000):
+    state, _ = env.reset()
 
-terminated = False
-truncated = False
+    terminated = False
+    truncated = False
 
-action = agent.choose_action(state)
+    action = agent.choose_action(state)
 
-while not (terminated or truncated):
+    while not (terminated or truncated):
 
-    next_state, reward, terminated, truncated, _ = env.step(action)
+        next_state, reward, terminated, truncated, _ = env.step(action)
 
-    if terminated or truncated:
-        next_action = None
-    else:
-        next_action = agent.choose_action(next_state)
+        if terminated or truncated:
+            next_action = None
+        else:
+            next_action = agent.choose_action(next_state)
 
-    agent.learn(state, action, reward, next_state, next_action, terminated, truncated)
+        agent.learn(state, action, reward, next_state, terminated, truncated)
 
-    state = next_state
+        state = next_state
 
-    if next_action is not None:
-        action = next_action
+        if next_action is not None:
+            action = next_action
 
 
-print(agent.Q)
+for state_action, qvalue in agent.Q.items():
+    print(state_action, qvalue)
