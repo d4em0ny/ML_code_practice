@@ -6,7 +6,7 @@ env = gym.make("Blackjack-v1")
 agent = MCAgent()
 
 
-num_of_episodes = 10000
+num_of_episodes = 500000
 
 for no_of_ep in range(num_of_episodes):
 
