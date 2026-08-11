@@ -6,7 +6,7 @@ env = gym.make("Blackjack-v1")
 agent = QLearningAgent()
 
 
-for i in range(1000):
+for i in range(10000000):
     state, _ = env.reset()
 
     terminated = False
