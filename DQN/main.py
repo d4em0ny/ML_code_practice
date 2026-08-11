@@ -44,7 +44,7 @@ def encode_state(state):
 
 
 def train():
-    num_episodes = 100000
+    num_episodes = 10000
     target_update_frequency = 100
 
     episode_rewards = []
@@ -159,8 +159,48 @@ def evaluate(num_episodes=10000):
     print(f"Draw rate:      {draw_rate:.2%}")
     print(f"Average reward: {average_reward:.3f}")
 
+
+def evaluate_random(num_episodes=10000):
+
+    wins = 0
+    losses = 0
+    draws = 0
+
+    total_reward = 0
+
+    for _ in range(num_episodes):
+
+        state, _ = env.reset()
+
+        terminated = False
+        truncated = False
+
+        while not (terminated or truncated):
+
+            action = env.action_space.sample()
+
+            state, reward, terminated, truncated, _ = env.step(action)
+
+        total_reward += reward
+
+        if reward == 1:
+            wins += 1
+        elif reward == -1:
+            losses += 1
+        else:
+            draws += 1
+
+    print(f"Win rate:       {wins / num_episodes:.2%}")
+    print(f"Loss rate:      {losses / num_episodes:.2%}")
+    print(f"Draw rate:      {draws / num_episodes:.2%}")
+    print(f"Average reward: {total_reward / num_episodes:.3f}")
+
 if __name__ == "__main__":
 
     train()
-    average_reward = evaluate()
-    print(f"Average reward: {average_reward}")
+    print(f"DQN")
+    evaluate()
+
+
+    print(f"random")
+    evaluate_random()
