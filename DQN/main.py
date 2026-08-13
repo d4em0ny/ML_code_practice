@@ -2,24 +2,57 @@ import gymnasium as gym
 import torch
 import torch.nn as nn
 import random as rand
-from network import Network
 
-#initializing Networks
+from network import Network
+from replay_buffer import ReplayBuffer
+
+
+# Networks
 target_network = Network()
 online_network = Network()
 
-#in the begining the two networks should be equal
 target_network.load_state_dict(online_network.state_dict())
 
+
+# Environment
 env = gym.make("Blackjack-v1")
-gamma = 1
+
+
+# Hyperparameters
+gamma = 1.0
 epsilon = 0.1
 
-optimizer = torch.optim.Adam(online_network.parameters(), lr= 0.001)
+batch_size = 32
+buffer_capacity = 10_000
+
+target_update_frequency = 100
+
+
+replay_buffer = ReplayBuffer(buffer_capacity)
+
+
+optimizer = torch.optim.Adam(online_network.parameters(),lr=0.001)
 loss_function = nn.MSELoss()
 
-# e-greedy action chooser
+
+
+def encode_state(state):
+
+    player_sum, dealer_card, usable_ace = state
+
+    return torch.tensor(
+        [
+            player_sum / 21.0,
+            dealer_card / 10.0,
+            float(usable_ace)
+        ],
+        dtype=torch.float32
+    )
+
+
+# Action Selection
 def choose_action(state):
+
     if rand.random() < epsilon:
         return rand.choice([0, 1])
 
@@ -31,22 +64,10 @@ def choose_action(state):
     return q_values.argmax().item()
 
 
-def encode_state(state):
-    player_sum, dealer_card, usable_ace = state
-
-    return torch.tensor(
-        [
-            player_sum / 21,
-            dealer_card / 10,
-            float(usable_ace)
-            ], dtype=torch.float32
-        )
-
 
 def train():
-    num_episodes = 10000
-    target_update_frequency = 100
 
+    num_episodes = 10000
     episode_rewards = []
 
     for episode in range(num_episodes):
@@ -55,49 +76,102 @@ def train():
 
         terminated = False
         truncated = False
+
         total_reward = 0
 
         while not (terminated or truncated):
 
+            # 1. Choose action
             action = choose_action(state)
+
+
+            # 2. Interact with environment
+
             next_state, reward, terminated, truncated, _ = env.step(action)
             total_reward += reward
+            done = terminated or truncated
 
-            # Current Q-value
-            state_tensor = encode_state(state)
-            q_values = online_network(state_tensor)
-            q_value = q_values[action]
 
-            # Target
-            with torch.no_grad():
+            # 3. Store experience
 
-                if terminated or truncated:
-                    target = torch.tensor(reward, dtype=torch.float32)
+            replay_buffer.push((state, action, reward, next_state, done))
 
-                else:
-                    next_state_tensor = encode_state(next_state)
-                    next_q_values = target_network(next_state_tensor)
-                    max_next_q_value = next_q_values.max()
 
-                    target = reward + gamma * max_next_q_value
+            # 4. Train only if enough
+            #    experiences exist
 
-            # Loss
-            loss = loss_function(q_value, target)
+            if len(replay_buffer) >= batch_size:
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+                # Get random batch
+                batch = replay_buffer.sample(batch_size)
+
+                # 5. Separate the batch
+                states = []
+                actions = []
+                rewards = []
+                next_states = []
+                dones = []
+
+                for experience in batch:
+
+                    state_b, action_b, reward_b, next_state_b, done_b = experience
+
+                    states.append(encode_state(state_b))
+                    actions.append(action_b)
+                    rewards.append(reward_b)
+                    next_states.append(encode_state(next_state_b))
+                    dones.append(done_b)
+
+                # 6. Convert to tensors
+
+                states = torch.stack(states)
+                actions = torch.tensor(actions, dtype=torch.long)
+                rewards = torch.tensor(rewards, dtype=torch.float32)
+                next_states = torch.stack(next_states)
+                dones = torch.tensor(dones, dtype=torch.bool)
+
+                # 7. Current Q-values
+
+                q_values = online_network(states)
+                q_values = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
+
+
+                # 8. Target Q-values
+                with torch.no_grad():
+
+                    next_q_values = target_network(next_states)
+                    max_next_q_values = next_q_values.max(dim=1).values
+
+                    targets = rewards + (gamma * max_next_q_values * (~dones))
+
+                # 9. Calculate loss
+                loss = loss_function(q_values, targets)
+
+
+                # 10. Backpropagation
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
             state = next_state
 
+
+        # End of episode
         episode_rewards.append(total_reward)
 
+
+        # Update target network
         if (episode + 1) % target_update_frequency == 0:
+
             target_network.load_state_dict(online_network.state_dict())
+
+
+
+        # Print progress
 
         if (episode + 1) % 1000 == 0:
 
-            avg_reward = sum(episode_rewards[-1000:]) / 1000
+            avg_reward = (sum(episode_rewards[-1000:]) / 1000)
 
             print(
                 f"Episode: {episode + 1}, "
@@ -105,7 +179,9 @@ def train():
             )
 
 
-def evaluate(num_episodes=10000):
+# Evaluation
+
+def evaluate(num_episodes=10_000):
 
     wins = 0
     losses = 0
@@ -125,15 +201,14 @@ def evaluate(num_episodes=10000):
             state_tensor = encode_state(state)
 
             with torch.no_grad():
+
                 q_values = online_network(state_tensor)
 
-            # Pure exploitation
             action = q_values.argmax().item()
-
             state, reward, terminated, truncated, _ = env.step(action)
 
-        # Episode is finished
         total_reward += reward
+
 
         if reward == 1:
             wins += 1
@@ -144,11 +219,13 @@ def evaluate(num_episodes=10000):
         else:
             draws += 1
 
+
     win_rate = wins / num_episodes
     loss_rate = losses / num_episodes
     draw_rate = draws / num_episodes
 
     average_reward = total_reward / num_episodes
+
 
     print(f"Games:          {num_episodes}")
     print(f"Wins:           {wins}")
@@ -160,47 +237,10 @@ def evaluate(num_episodes=10000):
     print(f"Average reward: {average_reward:.3f}")
 
 
-def evaluate_random(num_episodes=10000):
-
-    wins = 0
-    losses = 0
-    draws = 0
-
-    total_reward = 0
-
-    for _ in range(num_episodes):
-
-        state, _ = env.reset()
-
-        terminated = False
-        truncated = False
-
-        while not (terminated or truncated):
-
-            action = env.action_space.sample()
-
-            state, reward, terminated, truncated, _ = env.step(action)
-
-        total_reward += reward
-
-        if reward == 1:
-            wins += 1
-        elif reward == -1:
-            losses += 1
-        else:
-            draws += 1
-
-    print(f"Win rate:       {wins / num_episodes:.2%}")
-    print(f"Loss rate:      {losses / num_episodes:.2%}")
-    print(f"Draw rate:      {draws / num_episodes:.2%}")
-    print(f"Average reward: {total_reward / num_episodes:.3f}")
-
 if __name__ == "__main__":
 
     train()
-    print(f"DQN")
+
+    print("\nDQN")
+
     evaluate()
-
-
-    print(f"random")
-    evaluate_random()
